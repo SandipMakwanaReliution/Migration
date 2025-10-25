@@ -1,0 +1,55 @@
+<odoo>
+    <record id="view_form_database_connection" model="ir.ui.view">
+        <field name="name">database.connection.form</field>
+        <field name="model">database.connection</field>
+        <field name="arch" type="xml">
+            <form string="Database Connection">
+                <header>
+                    <button string="Connect" type="object" name="connect_to_database" class="btn-primary"/>
+                    <button string="Load Tables" type="object" name="load_tables" class="btn-primary"/>
+                    <button string="Disconnect" type="object" name="disconnect_database" class="btn-primary"/>
+                </header>
+                <sheet>
+                    <div class="o_row">
+                        <div class="o_col_6">
+                            <group>
+                                <field name="name"/>
+                                <field name="old_odoo_url"/>
+                                <field name="old_db_name"/>
+                                <field name="old_username"/>
+                                <field name="old_password" password="True"/>
+                            </group>
+                        </div>
+                        <div class="o_col_6">
+                            <group>
+                                <field name="pg_username"/>
+                                <field name="pg_password"/>
+                                <field name="pg_host"/>
+                            </group>
+                        </div>
+                    </div>
+
+                    <group string="Migration Tables">
+                        <field name="migration_table_ids">
+                            <tree editable="bottom">
+                                <field name="old_db_table"/>
+                                <field name="current_db_table"/>
+                                <field name="relational_db_tables"/>
+                                <button string="Load Fields" type="object" name="load_fields" class="btn-primary"/>
+                                <field name="matched"/>
+                            </tree>
+                        </field>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_database_connection" model="ir.actions.act_window">
+        <field name="name">Database Connection</field>
+        <field name="res_model">database.connection</field>
+        <field name="view_mode">tree,form</field>
+    </record>
+
+    <menuitem action="action_database_connection" id="menu_database_migration"/>
+</odoo>

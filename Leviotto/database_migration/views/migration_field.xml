@@ -1,0 +1,33 @@
+<odoo>
+    <record id="view_migration_field_list" model="ir.ui.view">
+        <field name="name">migration.field.list</field>
+        <field name="model">migration.field</field>
+        <field name="arch" type="xml">
+            <tree string="Migrate">
+                <header>
+                    <button string="Migrate Matched Fields With Query" type="object" name="action_migrate" class="btn-primary"
+                            confirm="Are you sure you want to migrate the matched fields?"/>
+                    <button name="action_migrate_relational_fields" type="object" string="Migrate Relational Fields" class="btn-primary"/>
+                    <button name="action_migrate_for_related_tables" type="object" string="Migrate Related Table's Fields" class="btn-primary"/>
+<!--                    <button name="action_migrate" type="object" string="Test Migration" class="btn-primary"/>-->
+                </header>
+                <field name="old_field_name"/>
+                <field name="current_field_name"/>
+                <field name="relational_field_name"/>
+                <field name="old_data_type"/>
+                <field name="current_data_type"/>
+                <field name="relation"/>
+                <field name="matched"/>
+            </tree>
+        </field>
+    </record>
+
+    <record id="action_load_fields" model="ir.actions.act_window">
+        <field name="name">Fields Comparison</field>
+        <field name="res_model">migration.field</field>
+        <field name="view_mode">tree,form</field>
+        <field name="target">current</field>
+        <field name="domain">[('table_id', '=', active_id)]</field>
+    </record>
+
+</odoo>

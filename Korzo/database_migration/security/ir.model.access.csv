@@ -1,0 +1,4 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_database_connection,access_database_connection,model_database_connection,,1,1,1,1
+access_migration_table,access_migration_table,model_migration_table,,1,1,1,1
+access_migration_field,access_migration_field,model_migration_field,,1,1,1,1
