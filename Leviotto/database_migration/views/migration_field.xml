@@ -9,7 +9,9 @@
                             confirm="Are you sure you want to migrate the matched fields?"/>
                     <button name="action_migrate_relational_fields" type="object" string="Migrate Relational Fields" class="btn-primary"/>
                     <button name="action_migrate_for_related_tables" type="object" string="Migrate Related Table's Fields" class="btn-primary"/>
-<!--                    <button name="action_migrate" type="object" string="Test Migration" class="btn-primary"/>-->
+                    <button name="action_migrate_not_stored_fields" type="object" string="Migrate Not-Stored Fields" class="btn-primary"/>
+                    <button name="update_create_date" type="object" string="Update Create Date" class="btn-primary"/>
+<!--                    <button name="update_payment_terms" type="object" string="Update Payment Terms" class="btn-primary"/>-->
                 </header>
                 <field name="old_field_name"/>
                 <field name="current_field_name"/>
@@ -18,6 +20,7 @@
                 <field name="current_data_type"/>
                 <field name="relation"/>
                 <field name="matched"/>
+                <field name="not_store"/>
             </tree>
         </field>
     </record>

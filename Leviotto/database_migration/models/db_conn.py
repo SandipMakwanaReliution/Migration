@@ -2,6 +2,9 @@ from odoo import api, models, fields
 import xmlrpc.client
 import psycopg2
 import logging
+import ast
+import re
+from markupsafe import Markup
 
 _logger = logging.getLogger(__name__)
 
@@ -241,17 +244,74 @@ class DBconnection(models.Model):
         else:
             return []
 
-    def update_product_name(self):
+    def update_name(self):
         product_id = self.env['product.template'].search(['|', ('active', '=', True), ('active', '=', False)])
         if product_id:
             for product in product_id:
                 if isinstance(product.name, str) and product.name.startswith("{") and product.name.endswith("}"):
                     try:
-                        import ast
                         name_dict = ast.literal_eval(product.name)
                         if 'en_US' in name_dict:
                             product.name = name_dict['en_US']
-                            _logger.info(f"product name update for {product.name}")
+                            _logger.info(f"Update Product Name : {product.name}")
                     except Exception as e:
-                        _logger.error(f"Failed to parse product name for {product.id}: {e}")
+                        _logger.error(f"Failed to Update Product Name for ID - {product.id} : {e}")
+
+                description_value = product.description
+                if description_value:
+                    if isinstance(description_value, Markup):
+                        description_value = str(description_value)
+                    match = re.search(r"\{.*'en_US'.*?\}", description_value)
+                    if match:
+                        dict_str = match.group(0)
+                        try:
+                            desc_dict = ast.literal_eval(dict_str)
+                            if 'en_US' in desc_dict:
+                                product.description = desc_dict['en_US']
+                                _logger.info(f"Updated Product Description for Product - {product.name} | ID - {product.id}")
+                        except Exception as e:
+                            _logger.error(f"Failed to update Product Description for ID {product.id}: {e}")
+
+        # Update Account Tax "Invoice Label"
+        account_tax_ids = self.env['account.tax'].search(['|', ('active', '=', True), ('active', '=', False)])
+        if account_tax_ids:
+            for account_tax_id in account_tax_ids:
+                if isinstance(account_tax_id.invoice_label, str) and account_tax_id.invoice_label.startswith("{") and account_tax_id.invoice_label.endswith("}"):
+                    try:
+                        name_dict = ast.literal_eval(account_tax_id.invoice_label)
+                        if 'en_US' in name_dict:
+                            account_tax_id.invoice_label = name_dict['en_US']
+                            _logger.info(f"Update Account Tax Invoice Label : {account_tax_id.invoice_label} | ID - {account_tax_id.id}")
+                    except Exception as e:
+                        _logger.error(f"Failed to Update Account Tax Invoice Label : {account_tax_id.invoice_label}  | ID - {account_tax_id.id} : {e}")
+
+        table_names_with_active = ['account.tax', 'account.account.tag', 'uom.uom', 'hr.job', 'account.payment.term',
+                                   'res.partner.category']
+        for table_name in table_names_with_active:
+            records = self.env[table_name].search(['|', ('active', '=', True), ('active', '=', False)])
+            if records:
+                for rec in records:
+                    if isinstance(rec.name, str) and rec.name.startswith("{") and rec.name.endswith("}"):
+                        try:
+                            name_dict = ast.literal_eval(rec.name)
+                            if 'en_US' in name_dict:
+                                rec.name = name_dict['en_US']
+                                _logger.info(f"Update Record Name : {rec.name} | ID - {rec.id} ")
+                        except Exception as e:
+                            _logger.error(f"Failed to Update Record Name - {rec.name} | ID - {rec.id} : {e}")
+
+        table_names = ['account.account', 'product.attribute.value', 'product.attribute', 'uom.category']
+        for table_name in table_names:
+            records = self.env[table_name].search([])
+            if records:
+                for rec in records:
+                    if isinstance(rec.name, str) and rec.name.startswith("{") and rec.name.endswith("}"):
+                        try:
+                            name_dict = ast.literal_eval(rec.name)
+                            if 'en_US' in name_dict:
+                                rec.name = name_dict['en_US']
+                                _logger.info(f"Update Record Name : {rec.name} | ID - {rec.id} ")
+                        except Exception as e:
+                            _logger.error(f"Failed to Update Record Name - {rec.name} | ID - {rec.id} : {e}")
+
 

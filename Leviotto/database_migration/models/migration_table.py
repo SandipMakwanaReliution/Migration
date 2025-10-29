@@ -58,6 +58,7 @@ class MigrationTable(models.Model):
                 "old_field_name": old_field["name"],
                 "old_data_type": old_field["data_type"],
                 "matched": False,
+                "not_store": old_field.get("not_store", False),
             }
 
             # If a match is found in the current model's fields
@@ -189,6 +190,20 @@ class MigrationTable(models.Model):
                         "relation": field.relation,
                     }
                 )
+
+            not_store_fields = self.env["ir.model.fields"].search([("model_id", "=", model_obj.id), ("store", "=", False)])
+            existing_field_names = {f["name"] for f in fields_list}
+
+            for field in not_store_fields:
+                if field.name not in existing_field_names:
+                    fields_list.append(
+                        {
+                            "name": field.name,
+                            "data_type": field.ttype,
+                            "relation": field.relation if field.ttype in ["one2many", "many2many","many2one"] else None,
+                            "not_store": True,
+                        }
+                    )
 
         return fields_list
 

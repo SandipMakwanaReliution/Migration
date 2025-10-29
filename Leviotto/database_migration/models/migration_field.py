@@ -1,4 +1,5 @@
-from odoo import models, api, fields
+import odoo
+from odoo import models, api, fields, SUPERUSER_ID
 import psycopg2
 import logging
 import xmlrpc.client
@@ -18,6 +19,7 @@ class MigrationField(models.Model):
     current_data_type = fields.Char("Current Data Type")
     matched = fields.Boolean("Matched", default=False)
     relation = fields.Char(string="Related Model")
+    not_store = fields.Boolean("Not Stored", default=False)
 
     def action_migrate_relational_fields(self):
         """Migrate many2many, one2many, and binary fields using XML-RPC."""
@@ -208,7 +210,8 @@ class MigrationField(models.Model):
                 "res_partner",
                 # "account_account",
                 "account_full_reconcile",
-                # "account_payment",
+                "account_payment",
+                # "pdc_account_payment",
                 # "account_move",
                 # "account_move_line"
             ):
@@ -322,7 +325,7 @@ class MigrationField(models.Model):
                         continue
 
                 if old_table_name == 'res_users':
-                    cursor_old.execute(f"SELECT {old_field_names} FROM {old_table_name} WHERE company_id = 2 or id In (6, 46);")
+                    cursor_old.execute(f"SELECT {old_field_names} FROM {old_table_name} WHERE company_id = 2 or id In (6, 46, 52);")
                     rows = cursor_old.fetchall()
                 elif old_table_name == 'product_product':
                     prefixed_field_names = ", ".join([f"pp.{f.strip()}" for f in old_field_names.split(",")])
@@ -333,21 +336,19 @@ class MigrationField(models.Model):
                         WHERE pt.company_id = 2 OR pt.company_id IS NULL;
                     """)
                     rows = cursor_old.fetchall()
-                elif old_table_name == 'stock_quant':
+                elif old_table_name in ['stock_quant', 'account_account', 'account_analytic_line', 'account_move',
+                                        'account_move_line']:
                     cursor_old.execute(f"SELECT {old_field_names} FROM {old_table_name} WHERE company_id = 2;")
                     rows = cursor_old.fetchall()
-                elif old_table_name == 'account_account':
-                    cursor_old.execute(f"SELECT {old_field_names} FROM {old_table_name} WHERE company_id = 2;")
-                    rows = cursor_old.fetchall()
-                elif old_table_name == 'account_analytic_line':
-                    cursor_old.execute(f"SELECT {old_field_names} FROM {old_table_name} WHERE company_id = 2;")
-                    rows = cursor_old.fetchall()
-                elif old_table_name == 'account_move':
-                    cursor_old.execute(f"SELECT {old_field_names} FROM {old_table_name} WHERE company_id = 2;")
-                    rows = cursor_old.fetchall()
-                elif old_table_name == 'account_move_line':
-                    cursor_old.execute(f"SELECT {old_field_names} FROM {old_table_name} WHERE company_id = 2;")
-                    rows = cursor_old.fetchall()
+                elif old_table_name == 'account_payment':
+                    old_move_ids = self.env['account.move'].search([]).mapped('old_id') # already filtered by company earlier
+                    if old_move_ids:
+                        move_ids_tuple = tuple(old_move_ids)
+                        query = f"SELECT {old_field_names} FROM {old_table_name} WHERE move_id IN %s"
+                        cursor_old.execute(query, (move_ids_tuple,))
+                        rows = cursor_old.fetchall()
+                    else:
+                        rows = []
                 else:
                     cursor_old.execute(f"SELECT {old_field_names} FROM {old_table_name}")
                     rows = cursor_old.fetchall()
@@ -628,7 +629,7 @@ class MigrationField(models.Model):
                     cursor.execute(f"SELECT {old_field_names} FROM {old_table_name} WHERE id = 2;")
                     rows = cursor.fetchall()
                 elif old_table_name == 'hr_employee':
-                    cursor.execute(f"SELECT {old_field_names} FROM {old_table_name} WHERE company_id = 2 OR id IN (15, 36);")
+                    cursor.execute(f"SELECT {old_field_names} FROM {old_table_name} WHERE company_id = 2 OR id IN (15, 36, 40);")
                     rows = cursor.fetchall()
                 elif old_table_name == 'product_template':
                     cursor.execute(f"SELECT {old_field_names} FROM {old_table_name} WHERE company_id = 2 OR company_id Is Null;")
@@ -652,53 +653,23 @@ class MigrationField(models.Model):
                     id_list_str = ", ".join(map(str, old_template_ids))
                     cursor.execute(f"SELECT {old_field_names} FROM {old_table_name} WHERE product_tmpl_id In ({id_list_str});")
                     rows = cursor.fetchall()
-                elif old_table_name == 'account_account':
+                elif old_table_name in ['account_account', 'account_tax', 'account_tax_repartition_line', 'account_journal',
+                                        'account_fiscal_position', 'account_fiscal_position_tax', 'account_tax_group',
+                                        'account_analytic_account', 'hr_expense', 'hr_expense_sheet', 'account_partial_reconcile']:
                     cursor.execute(f"SELECT {old_field_names} FROM {old_table_name} WHERE company_id = 2;")
                     rows = cursor.fetchall()
-                elif old_table_name == 'account_tax':
-                    cursor.execute(f"SELECT {old_field_names} FROM {old_table_name} WHERE company_id = 2;")
-                    rows = cursor.fetchall()
-                elif old_table_name == 'account_tax_repartition_line':
-                    cursor.execute(f"SELECT {old_field_names} FROM {old_table_name} WHERE company_id = 2;")
-                    rows = cursor.fetchall()
-                elif old_table_name == 'account_journal':
-                    cursor.execute(f"SELECT {old_field_names} FROM {old_table_name} WHERE company_id = 2;")
-                    rows = cursor.fetchall()
-                elif old_table_name == 'account_fiscal_position':
-                    cursor.execute(f"SELECT {old_field_names} FROM {old_table_name} WHERE company_id = 2;")
-                    rows = cursor.fetchall()
-                elif old_table_name == 'account_fiscal_position_tax':
-                    cursor.execute(f"SELECT {old_field_names} FROM {old_table_name} WHERE company_id = 2;")
-                    rows = cursor.fetchall()
-                elif old_table_name == 'account_tax_group':
-                    cursor.execute(f"SELECT {old_field_names} FROM {old_table_name} WHERE company_id = 2;")
-                    rows = cursor.fetchall()
-                elif old_table_name == 'account_analytic_account':
-                    cursor.execute(f"SELECT {old_field_names} FROM {old_table_name} WHERE company_id = 2;")
-                    rows = cursor.fetchall()
-                elif old_table_name == 'hr_expense':
-                    cursor.execute(f"SELECT {old_field_names} FROM {old_table_name} WHERE company_id = 2;")
-                    rows = cursor.fetchall()
-                elif old_table_name == 'hr_expense_sheet':
-                    cursor.execute(f"SELECT {old_field_names} FROM {old_table_name} WHERE company_id = 2;")
-                    rows = cursor.fetchall()
-                elif old_table_name == 'account_partial_reconcile':
-                    cursor.execute(f"SELECT {old_field_names} FROM {old_table_name} WHERE company_id = 2;")
-                    rows = cursor.fetchall()
-
-
-
-                elif old_table_name == 'account_payment':
-                    cursor.execute(f"SELECT {old_field_names} FROM {old_table_name} WHERE company_id = 2;")
-                    rows = cursor.fetchall()
-
+                elif old_table_name == 'pdc_account_payment':
+                    old_journal_ids = self.env['account.journal'].search([]).mapped('old_id')  # already filtered by company earlier
+                    if old_journal_ids:
+                        journal_ids_tuple = tuple(old_journal_ids)
+                        query = f"SELECT {old_field_names} FROM {old_table_name} WHERE journal_id IN %s"
+                        cursor.execute(query, (journal_ids_tuple,))
+                        rows = cursor.fetchall()
+                    else:
+                        rows = []
                 else:
                     cursor.execute(f"SELECT {old_field_names} FROM {old_table_name};")
                     rows = cursor.fetchall()
-
-                # elif old_table_name == 'stock_quant_package':
-                #     cursor.execute(f"SELECT {old_field_names} FROM {old_table_name} WHERE company_id = 2 OR location_id In (4, 5);")
-                #     rows = cursor.fetchall()
 
                 # Divide the rows into batches
                 total_rows = len(rows)
@@ -863,6 +834,9 @@ class MigrationField(models.Model):
                                     if current_table == "product.category" and "property_valuation" not in record_data_to_update:
                                         record_data_to_update["property_valuation"] = "real_time"
 
+                                    if current_table == "product.category" and "property_cost_method" not in record_data_to_update:
+                                        record_data_to_update["property_cost_method"] = "average"
+
                                     existing_record.write(record_data_to_update)
                                     self.env.cr.commit()
                                     _logger.info(
@@ -876,6 +850,9 @@ class MigrationField(models.Model):
                                 try:
                                     if current_table == "product.category" and "property_valuation" not in record_data:
                                         record_data["property_valuation"] = "real_time"
+
+                                    if current_table == "product.category" and "property_cost_method" not in record_data:
+                                        record_data["property_cost_method"] = "average"
 
                                     if current_table == "account.journal" and old_id_value in [15, 16]:
                                         for key, value in record_data.items():
@@ -1020,60 +997,212 @@ class MigrationField(models.Model):
             cursor_old.execute(f"SELECT {old_field_names} FROM {old_table_name};")
             rows = cursor_old.fetchall()
 
-            for row in rows:
-                record_data = {}
-                for idx, field_name in enumerate(current_field_names):
-                    value = row[idx]
-                    if isinstance(value, dict):
-                        value = psycopg2.extras.Json(value)  # Handle JSON if needed
-                    record_data[field_name] = value
+            if current_table_name == "account_move_line_account_tax_rel":
+                # Fetch specific company data from old database
+                cursor_old.execute(f"""
+                    SELECT {old_field_names}
+                    FROM {old_table_name} rel
+                    JOIN account_move_line aml ON aml.id = rel.account_move_line_id
+                    WHERE aml.company_id = 2;
+                """)
+                rows = cursor_old.fetchall()
 
-                insert_fields = ", ".join(current_field_names)
-                insert_placeholders = ", ".join(["%s"] * len(current_field_names))
-                sql_insert_query = f"INSERT INTO {current_table_name} ({insert_fields}) VALUES ({insert_placeholders})"
-                insert_values = [record_data[field] for field in current_field_names]
-                cursor_current.execute(sql_insert_query, insert_values)
-                _logger.info(f"Inserted new record with fields: {insert_values}")
+                for row in rows:
+                    old_move_line_id, old_tax_id = row
+
+                    # Get new account.move.line ID using old_id
+                    cursor_current.execute("SELECT id FROM account_move_line WHERE old_id = %s", (old_move_line_id,))
+                    result = cursor_current.fetchone()
+                    new_move_line_id = result[0] if result else None
+
+                    # Get new account.tax ID using old_id
+                    cursor_current.execute("SELECT id FROM account_tax WHERE old_id = %s", (old_tax_id,))
+                    result = cursor_current.fetchone()
+                    new_tax_id = result[0] if result else None
+
+                    # Skip if mapping fails
+                    if not new_move_line_id or not new_tax_id:
+                        _logger.warning(
+                            f"Skipping row: account_move_line_id or account_tax_id not found for old_ids: {old_move_line_id}, {old_tax_id}"
+                        )
+                        continue
+
+                    # Check for existing record to avoid duplicates
+                    cursor_current.execute(
+                        """
+                        SELECT 1 FROM account_move_line_account_tax_rel
+                        WHERE account_move_line_id = %s AND account_tax_id = %s
+                        """,
+                        (new_move_line_id, new_tax_id)
+                    )
+                    if cursor_current.fetchone():
+                        _logger.info(
+                            f"Relation already exists for account_move_line_id={new_move_line_id}, account_tax_id={new_tax_id}. Skipping."
+                        )
+                        continue
+
+                    # Insert the new relation
+                    cursor_current.execute(
+                        """
+                        INSERT INTO account_move_line_account_tax_rel (account_move_line_id, account_tax_id)
+                        VALUES (%s, %s)
+                        """,
+                        (new_move_line_id, new_tax_id)
+                    )
+                    _logger.info(
+                        f"Inserted relation: account_move_line_id={new_move_line_id}, account_tax_id={new_tax_id}"
+                    )
+            elif current_table_name == "account_account_tag_account_move_line_rel":
+                # Fetch specific company data from old database
+                cursor_old.execute(f"""
+                    SELECT {old_field_names}
+                    FROM {old_table_name} rel
+                    JOIN account_move_line aml ON aml.id = rel.account_move_line_id
+                    WHERE aml.company_id = 2;
+                """)
+                rows = cursor_old.fetchall()
+
+                for row in rows:
+                    # Assuming row contains old_move_line_id and old_tag_id from old DB
+                    old_move_line_id, old_tag_id = row
+
+                    # Get new account.move.line ID using old_id
+                    cursor_current.execute("SELECT id FROM account_move_line WHERE old_id = %s", (old_move_line_id,))
+                    result = cursor_current.fetchone()
+                    new_move_line_id = result[0] if result else None
+
+                    # Get new account.account.tag ID using old_id
+                    cursor_current.execute("SELECT id FROM account_account_tag WHERE old_id = %s", (old_tag_id,))
+                    result = cursor_current.fetchone()
+                    new_tag_id = result[0] if result else None
+
+                    # Skip if mapping fails
+                    if not new_move_line_id or not new_tag_id:
+                        _logger.warning(
+                            f"Skipping row: account_move_line_id or account_account_tag_id not found for old_ids: {old_move_line_id}, {old_tag_id}"
+                        )
+                        continue
+
+                    # Check for existing record to avoid duplicates
+                    cursor_current.execute(
+                        """
+                        SELECT 1 FROM account_account_tag_account_move_line_rel
+                        WHERE account_move_line_id = %s AND account_account_tag_id = %s
+                        """,
+                        (new_move_line_id, new_tag_id)
+                    )
+                    if cursor_current.fetchone():
+                        _logger.info(
+                            f"Relation already exists for account_move_line_id={new_move_line_id}, account_account_tag_id={new_tag_id}. Skipping."
+                        )
+                        continue
+
+                    # Insert the new relation
+                    cursor_current.execute(
+                        """
+                        INSERT INTO account_account_tag_account_move_line_rel (account_move_line_id, account_account_tag_id)
+                        VALUES (%s, %s)
+                        """,
+                        (new_move_line_id, new_tag_id)
+                    )
+                    _logger.info(
+                        f"Inserted relation: account_move_line_id={new_move_line_id}, account_account_tag_id={new_tag_id}"
+                    )
+            elif current_table_name in ["product_supplier_taxes_rel", "product_taxes_rel"]:
+                for row in rows:
+                    old_prod_id, old_tax_id = row
+
+                    # Get new product_template ID using old_id
+                    cursor_current.execute("SELECT id FROM product_template WHERE old_id = %s", (old_prod_id,))
+                    result = cursor_current.fetchone()
+                    new_prod_id = result[0] if result else None
+
+                    # Get new account_tax ID using old_id
+                    cursor_current.execute("SELECT id FROM account_tax WHERE old_id = %s", (old_tax_id,))
+                    result = cursor_current.fetchone()
+                    new_tax_id = result[0] if result else None
+
+                    # Skip if either mapping not found
+                    if not new_prod_id or not new_tax_id:
+                        _logger.warning(
+                            f"Skipping row: prod_id or tax_id not found for old_ids: {old_prod_id}, {old_tax_id}")
+                        continue
+
+                    # Check if the record already exists to prevent duplicates
+                    cursor_current.execute(
+                        f"""
+                           SELECT 1 FROM {current_table_name}
+                           WHERE prod_id = %s AND tax_id = %s
+                           """,
+                        (new_prod_id, new_tax_id)
+                    )
+                    if cursor_current.fetchone():
+                        _logger.info(
+                            f"Relation already exists for prod_id={new_prod_id}, tax_id={new_tax_id}. Skipping.")
+                        continue
+
+                    # Insert the record
+                    cursor_current.execute(
+                        f"INSERT INTO {current_table_name} (prod_id, tax_id) VALUES (%s, %s)",
+                        (new_prod_id, new_tax_id)
+                    )
+                    _logger.info(f"Inserted new relation: prod_id={new_prod_id}, tax_id={new_tax_id}")
 
             # For HR Expense tax_ids fields
-            # for row in rows:
-            #     old_expense_id, old_tax_id = row
-            #
-            #     # Get new hr_expense ID using old_id
-            #     cursor_current.execute("SELECT id FROM hr_expense WHERE old_id = %s", (old_expense_id,))
-            #     result = cursor_current.fetchone()
-            #     new_expense_id = result[0] if result else None
-            #
-            #     # Get new account_tax ID using old_id
-            #     cursor_current.execute("SELECT id FROM account_tax WHERE old_id = %s", (old_tax_id,))
-            #     result = cursor_current.fetchone()
-            #     new_tax_id = result[0] if result else None
-            #
-            #     # Skip if mapping fails
-            #     if not new_expense_id or not new_tax_id:
-            #         _logger.warning(
-            #             f"Skipping: expense_id or tax_id not found for old_ids: {old_expense_id}, {old_tax_id}")
-            #         continue
-            #
-            #     # Check for existing entry to avoid duplicates
-            #     cursor_current.execute(
-            #         f"""
-            #         SELECT 1 FROM {current_table_name}
-            #         WHERE expense_id = %s AND tax_id = %s
-            #         """,
-            #         (new_expense_id, new_tax_id)
-            #     )
-            #     if cursor_current.fetchone():
-            #         _logger.info(
-            #             f"Relation already exists for expense_id={new_expense_id}, tax_id={new_tax_id}. Skipping.")
-            #         continue
-            #
-            #     # Insert the relation
-            #     cursor_current.execute(
-            #         f"INSERT INTO {current_table_name} (expense_id, tax_id) VALUES (%s, %s)",
-            #         (new_expense_id, new_tax_id)
-            #     )
-            #     _logger.info(f"Inserted: expense_id={new_expense_id}, tax_id={new_tax_id}")
+            elif current_table_name == "expense_tax":
+                for row in rows:
+                    old_expense_id, old_tax_id = row
+
+                    # Get new hr_expense ID using old_id
+                    cursor_current.execute("SELECT id FROM hr_expense WHERE old_id = %s", (old_expense_id,))
+                    result = cursor_current.fetchone()
+                    new_expense_id = result[0] if result else None
+
+                    # Get new account_tax ID using old_id
+                    cursor_current.execute("SELECT id FROM account_tax WHERE old_id = %s", (old_tax_id,))
+                    result = cursor_current.fetchone()
+                    new_tax_id = result[0] if result else None
+
+                    # Skip if mapping fails
+                    if not new_expense_id or not new_tax_id:
+                        _logger.warning(
+                            f"Skipping: expense_id or tax_id not found for old_ids: {old_expense_id}, {old_tax_id}")
+                        continue
+
+                    # Check for existing entry to avoid duplicates
+                    cursor_current.execute(
+                        f"""
+                        SELECT 1 FROM {current_table_name}
+                        WHERE expense_id = %s AND tax_id = %s
+                        """,
+                        (new_expense_id, new_tax_id)
+                    )
+                    if cursor_current.fetchone():
+                        _logger.info(
+                            f"Relation already exists for expense_id={new_expense_id}, tax_id={new_tax_id}. Skipping.")
+                        continue
+
+                    # Insert the relation
+                    cursor_current.execute(
+                        f"INSERT INTO {current_table_name} (expense_id, tax_id) VALUES (%s, %s)",
+                        (new_expense_id, new_tax_id)
+                    )
+                    _logger.info(f"Inserted: expense_id={new_expense_id}, tax_id={new_tax_id}")
+            else:
+                for row in rows:
+                    record_data = {}
+                    for idx, field_name in enumerate(current_field_names):
+                        value = row[idx]
+                        if isinstance(value, dict):
+                            value = psycopg2.extras.Json(value)  # Handle JSON if needed
+                        record_data[field_name] = value
+
+                    insert_fields = ", ".join(current_field_names)
+                    insert_placeholders = ", ".join(["%s"] * len(current_field_names))
+                    sql_insert_query = f"INSERT INTO {current_table_name} ({insert_fields}) VALUES ({insert_placeholders})"
+                    insert_values = [record_data[field] for field in current_field_names]
+                    cursor_current.execute(sql_insert_query, insert_values)
+                    _logger.info(f"Inserted new record with fields: {insert_values}")
 
             cursor_current.connection.commit()
 
@@ -1100,3 +1229,241 @@ class MigrationField(models.Model):
                 cursor_current.close()
             if conn_current:
                 conn_current.close()
+
+    def action_migrate_not_stored_fields(self):
+        try:
+            connection = self.table_id.connection_id
+            url = f"{connection.old_odoo_url}"
+            old_db = connection.old_db_name
+            username = connection.old_username
+            password = connection.old_password
+
+            common = xmlrpc.client.ServerProxy(f"{url}/xmlrpc/2/common")
+            old_uid = common.authenticate(old_db, username, password, {})
+            if not old_uid:
+                raise ValueError("Failed to authenticate to the old database.")
+
+            # Old database connection
+            models = xmlrpc.client.ServerProxy(f"{url}/xmlrpc/2/object")
+
+            selected_field_ids = self.env.context.get("active_ids", [])
+            selected_fields = self.browse(selected_field_ids)
+
+            if not selected_fields:
+                return {
+                    "type": "ir.actions.client",
+                    "tag": "display_notification",
+                    "params": {
+                        "title": "No Fields Selected",
+                        "message": "Please select fields to migrate.",
+                        "type": "warning",
+                        "sticky": False,
+                    },
+                }
+
+            field_names = [field.old_field_name for field in selected_fields]
+            if "id" not in field_names:
+                return {
+                    "type": "ir.actions.client",
+                    "tag": "display_notification",
+                    "params": {
+                        "title": "Missing Required Field",
+                        "message": "You must select the 'id' field for migration.",
+                        "type": "danger",
+                        "sticky": False,
+                    },
+                }
+
+            # Prepare old DB Table
+            old_table_name = self.table_id.old_db_table
+            old_table_cus_name = old_table_name.replace("_", ".")
+
+            # Fetch records from old DB
+            old_records = []
+            if old_table_name == "res_partner":
+                old_records = models.execute_kw(old_db, old_uid, password, old_table_cus_name, "search_read", [[]],
+                    {"fields": field_names, 'context': {'active_test': False}})
+            else:
+                old_records = models.execute_kw(old_db, old_uid, password, old_table_cus_name, "search_read", [[]],
+                    {"fields": field_names, 'context': {'active_test': False}})
+
+            for old_rec in old_records:
+                old_id = old_rec.get("id")
+                if not old_id:
+                    continue
+
+                # Migrate data to current DB
+                current_rec = self.env[old_table_cus_name].search([("old_id", "=", old_id)], limit=1)
+                if not current_rec:
+                    continue
+
+                update_vals = {}
+                for field in selected_fields:
+                    if field.old_field_name == "id":
+                        continue
+
+                    if field.old_field_name in ["property_account_receivable_id", "property_account_payable_id"]:
+                        acc_field = old_rec.get(field.old_field_name)
+                        acc_id = acc_field[0] if acc_field else False # many2one field (ID only)
+                        acc_data = models.execute_kw(old_db, old_uid, password, "account.account", "read", [acc_id],
+                            {"fields": ["code"]})
+                        if acc_data:
+                            account_rec = self.env["account.account"].search([("code", "=", acc_data[0]['code'])], limit=1)
+                            if account_rec:
+                                update_vals[field.old_field_name] = account_rec.id
+                    elif field.old_field_name in ["property_payment_term_id", "property_supplier_payment_term_id"]:
+                        old_payment_term = old_rec.get(field.old_field_name)
+                        old_payment_term_id = old_payment_term[0] if old_payment_term else False # many2one field (ID only)
+                        new_payment_term_id = self.env["account.payment.term"].search([("old_id", "=", old_payment_term_id)], limit=1)
+                        if new_payment_term_id:
+                            update_vals[field.old_field_name] = new_payment_term_id.id
+                    else:
+                        update_vals[field.old_field_name] = old_rec.get(field.old_field_name)
+
+                if update_vals:
+                    current_rec.write(update_vals)
+                    _logger.info(f"Update record with : ID - {current_rec.id} | Old Id - {old_id} | Value - {update_vals}")
+
+            return {
+                "type": "ir.actions.client",
+                "tag": "display_notification",
+                "params": {
+                    "title": "Fields Migration Successful",
+                    "message": f"Fields migrated into {old_table_cus_name} successfully!",
+                    "type": "success",
+                    "sticky": False,
+                },
+            }
+
+        except Exception as e:
+            return {
+                "type": "ir.actions.client",
+                "tag": "display_notification",
+                "params": {
+                    "title": "Migration Error",
+                    "message": f"Error during migration: {str(e)}",
+                    "type": "danger",
+                    "sticky": False,
+                },
+            }
+
+    def update_create_date(self):
+        conn_old = None
+        cursor_old = None
+        conn_current = None
+        cursor_current = None
+        try:
+            old_table_name = self.table_id.old_db_table
+
+            # Connect to the old database
+            connection = self.table_id.connection_id
+            conn_old = psycopg2.connect(
+                dbname=connection.old_db_name,
+                user=connection.pg_username,
+                password=connection.pg_password,
+                host=connection.pg_host,
+            )
+            cursor_old = conn_old.cursor()
+
+            # Connect to the current Odoo database
+            conn_current = psycopg2.connect(
+                dbname=self.env.cr.dbname,
+                user="odoo",
+                password="odoo",
+                host="localhost",
+            )
+            cursor_current = conn_current.cursor()
+
+            # Fetch data from old database
+            if old_table_name in [ 'hr_expense', 'hr_expense_sheet']:
+                cursor_old.execute(f"SELECT id, create_date FROM {old_table_name} WHERE company_id = 2;")
+                rows = cursor_old.fetchall()
+
+                if rows:
+                    for old_id, create_date in rows:
+                        cursor_current.execute(f"""UPDATE {old_table_name} SET create_date = %s WHERE old_id = %s;""", (create_date, old_id))
+                        _logger.info(f"Updated : {old_table_name} , Old id : {old_id}, Total Record : {len(rows)}.")
+
+                    conn_current.commit()
+
+        except Exception as e:
+            _logger.error(f"Error during migration: {str(e)}")
+            raise
+        finally:
+            if cursor_old:
+                cursor_old.close()
+            if conn_old:
+                conn_old.close()
+            if cursor_current:
+                cursor_current.close()
+            if conn_current:
+                conn_current.close()
+
+    # def update_payment_terms(self):
+    #     try:
+    #         connection = self.table_id.connection_id
+    #
+    #         url = f"{connection.old_odoo_url}"
+    #         old_db = connection.old_db_name
+    #         username = connection.old_username
+    #         password = connection.old_password
+    #
+    #         new_db_name = self.env.cr.dbname
+    #         old_table_name = self.table_id.old_db_table
+    #         old_table_name = old_table_name.replace('_', '.')
+    #
+    #         # XML-RPC setup
+    #         common = xmlrpc.client.ServerProxy(f"{url}/xmlrpc/2/common")
+    #         models = xmlrpc.client.ServerProxy(f"{url}/xmlrpc/2/object")
+    #
+    #         # Authenticate
+    #         old_uid = common.authenticate(old_db, username, password, {})
+    #         new_uid = common.authenticate(new_db_name, username, password, {})
+    #
+    #         payment_fields = ['property_supplier_payment_term_id'] # 'property_payment_term_id',
+    #
+    #         for field_name in payment_fields:
+    #
+    #             # Fetch records from old DB
+    #             old_record_ids = models.execute_kw(old_db, old_uid, password, old_table_name, 'search', [[(field_name, '!=', False)]], {'context': {'active_test': False}},)
+    #             if not old_record_ids:
+    #                 continue
+    #             old_record_data = models.execute_kw(old_db, old_uid, password, old_table_name, 'read',[old_record_ids], {'fields': ['id', field_name]},)
+    #             print(f"Fetched {len(old_record_data)} records with {field_name} from old DB.")
+    #
+    #             for rec in old_record_data:
+    #                 old_rec_id = rec['id']
+    #                 old_term_field = rec.get(field_name)
+    #                 if not old_term_field:
+    #                     continue
+    #
+    #                 old_payment_term_id = old_term_field[0]  # many2one field (ID only)
+    #
+    #                 # Find matching record in NEW DB by old_id
+    #                 new_record_find = models.execute_kw(new_db_name, new_uid, password, old_table_name, 'search', [[('old_id', '=', old_rec_id)]], {'context': {'active_test': False}},)
+    #                 if not new_record_find:
+    #                     print(f"⚠️ Partner old_id {old_rec_id} not found in new DB.")
+    #                     continue
+    #
+    #                 # Find matching payment term in NEW DB by old_id
+    #                 new_payment_term_ids = models.execute_kw(new_db_name, new_uid, password, 'account.payment.term', 'search', [[('old_id', '=', old_payment_term_id)]],)
+    #
+    #                 if not new_payment_term_ids:
+    #                     print(f"⚠️ Payment Term old_id {old_payment_term_id} not found in new DB for partner old_id {old_rec_id}")
+    #                     continue
+    #
+    #                 models.execute_kw(new_db_name, new_uid, password, old_table_name, 'write', [new_record_find, {field_name: new_payment_term_ids[0]}],)
+    #
+    #                 print(f"✅ Updated partner old_id {old_rec_id} field {field_name} → term old_id {old_payment_term_id}")
+    #
+    #     except Exception as e:
+    #         return {
+    #             "type": "ir.actions.client",
+    #             "tag": "display_notification",
+    #             "params": {
+    #                 "title": "Migration Error",
+    #                 "message": f"Error during migration: {str(e)}",
+    #                 "type": "danger",
+    #                 "sticky": False,
+    #             },
+    #         }
