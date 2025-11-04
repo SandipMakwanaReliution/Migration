@@ -141,6 +141,7 @@ class MigrationField(models.Model):
                         if current_record:
                             # Update the binary field with the fetched data
                             current_record.write({current_field_name: binary_data})
+                            _logger.info("Record Written Successfully...")
 
             return {
                 "type": "ir.actions.client",
@@ -325,7 +326,7 @@ class MigrationField(models.Model):
                         continue
 
                 if old_table_name == 'res_users':
-                    cursor_old.execute(f"SELECT {old_field_names} FROM {old_table_name} WHERE company_id = 2 or id In (6, 46, 52);")
+                    cursor_old.execute(f"SELECT {old_field_names} FROM {old_table_name} WHERE company_id = 2 or id In (6, 46, 52, 47);")
                     rows = cursor_old.fetchall()
                 elif old_table_name == 'product_product':
                     prefixed_field_names = ", ".join([f"pp.{f.strip()}" for f in old_field_names.split(",")])
@@ -655,8 +656,11 @@ class MigrationField(models.Model):
                     rows = cursor.fetchall()
                 elif old_table_name in ['account_account', 'account_tax', 'account_tax_repartition_line', 'account_journal',
                                         'account_fiscal_position', 'account_fiscal_position_tax', 'account_tax_group',
-                                        'account_analytic_account', 'hr_expense', 'hr_expense_sheet', 'account_partial_reconcile']:
+                                        'account_analytic_account', 'hr_expense', 'account_partial_reconcile']:
                     cursor.execute(f"SELECT {old_field_names} FROM {old_table_name} WHERE company_id = 2;")
+                    rows = cursor.fetchall()
+                elif old_table_name == 'hr_expense_sheet':
+                    cursor.execute(f"SELECT {old_field_names} FROM {old_table_name} WHERE company_id = 2 and id NOT IN (530, 1443, 1446);")
                     rows = cursor.fetchall()
                 elif old_table_name == 'pdc_account_payment':
                     old_journal_ids = self.env['account.journal'].search([]).mapped('old_id')  # already filtered by company earlier
@@ -1108,6 +1112,7 @@ class MigrationField(models.Model):
                     _logger.info(
                         f"Inserted relation: account_move_line_id={new_move_line_id}, account_account_tag_id={new_tag_id}"
                     )
+            # For Product Customer and Vendor Taxes
             elif current_table_name in ["product_supplier_taxes_rel", "product_taxes_rel"]:
                 for row in rows:
                     old_prod_id, old_tax_id = row
@@ -1283,6 +1288,9 @@ class MigrationField(models.Model):
             if old_table_name == "res_partner":
                 old_records = models.execute_kw(old_db, old_uid, password, old_table_cus_name, "search_read", [[]],
                     {"fields": field_names, 'context': {'active_test': False}})
+            elif old_table_name in ["product_product", "product_template"]:
+                old_records = models.execute_kw(old_db, old_uid, password, old_table_cus_name, "search_read", [["|", ("company_id", "=", 2), ("company_id", "=", False)]],
+                                                {"fields": field_names, 'context': {'active_test': False}})
             else:
                 old_records = models.execute_kw(old_db, old_uid, password, old_table_cus_name, "search_read", [[]],
                     {"fields": field_names, 'context': {'active_test': False}})
@@ -1293,7 +1301,7 @@ class MigrationField(models.Model):
                     continue
 
                 # Migrate data to current DB
-                current_rec = self.env[old_table_cus_name].search([("old_id", "=", old_id)], limit=1)
+                current_rec = self.env[old_table_cus_name].with_context(active_test=False).search([("old_id", "=", old_id)], limit=1)
                 if not current_rec:
                     continue
 
@@ -1324,6 +1332,7 @@ class MigrationField(models.Model):
                     current_rec.write(update_vals)
                     _logger.info(f"Update record with : ID - {current_rec.id} | Old Id - {old_id} | Value - {update_vals}")
 
+            _logger.info("Process completed successfully")
             return {
                 "type": "ir.actions.client",
                 "tag": "display_notification",
@@ -1378,13 +1387,22 @@ class MigrationField(models.Model):
             if old_table_name in [ 'hr_expense', 'hr_expense_sheet']:
                 cursor_old.execute(f"SELECT id, create_date FROM {old_table_name} WHERE company_id = 2;")
                 rows = cursor_old.fetchall()
+            elif old_table_name == 'hr_employee':
+                cursor_old.execute(f"SELECT id, create_date FROM {old_table_name} WHERE company_id = 2 OR id IN (1, 15, 36, 40);")
+                rows = cursor_old.fetchall()
+            elif old_table_name == 'product_template':
+                cursor_old.execute(f"SELECT id, create_date FROM {old_table_name} WHERE company_id = 2 OR company_id Is Null;")
+                rows = cursor_old.fetchall()
+            else:
+                cursor_old.execute(f"SELECT id, create_date FROM {old_table_name};")
+                rows = cursor_old.fetchall()
 
-                if rows:
-                    for old_id, create_date in rows:
-                        cursor_current.execute(f"""UPDATE {old_table_name} SET create_date = %s WHERE old_id = %s;""", (create_date, old_id))
-                        _logger.info(f"Updated : {old_table_name} , Old id : {old_id}, Total Record : {len(rows)}.")
+            if rows:
+                for old_id, create_date in rows:
+                    cursor_current.execute(f"""UPDATE {old_table_name} SET create_date = %s WHERE old_id = %s;""", (create_date, old_id))
+                    _logger.info(f"Updated : {old_table_name} , Old id : {old_id}, Total Record : {len(rows)}.")
 
-                    conn_current.commit()
+                conn_current.commit()
 
         except Exception as e:
             _logger.error(f"Error during migration: {str(e)}")
@@ -1398,72 +1416,3 @@ class MigrationField(models.Model):
                 cursor_current.close()
             if conn_current:
                 conn_current.close()
-
-    # def update_payment_terms(self):
-    #     try:
-    #         connection = self.table_id.connection_id
-    #
-    #         url = f"{connection.old_odoo_url}"
-    #         old_db = connection.old_db_name
-    #         username = connection.old_username
-    #         password = connection.old_password
-    #
-    #         new_db_name = self.env.cr.dbname
-    #         old_table_name = self.table_id.old_db_table
-    #         old_table_name = old_table_name.replace('_', '.')
-    #
-    #         # XML-RPC setup
-    #         common = xmlrpc.client.ServerProxy(f"{url}/xmlrpc/2/common")
-    #         models = xmlrpc.client.ServerProxy(f"{url}/xmlrpc/2/object")
-    #
-    #         # Authenticate
-    #         old_uid = common.authenticate(old_db, username, password, {})
-    #         new_uid = common.authenticate(new_db_name, username, password, {})
-    #
-    #         payment_fields = ['property_supplier_payment_term_id'] # 'property_payment_term_id',
-    #
-    #         for field_name in payment_fields:
-    #
-    #             # Fetch records from old DB
-    #             old_record_ids = models.execute_kw(old_db, old_uid, password, old_table_name, 'search', [[(field_name, '!=', False)]], {'context': {'active_test': False}},)
-    #             if not old_record_ids:
-    #                 continue
-    #             old_record_data = models.execute_kw(old_db, old_uid, password, old_table_name, 'read',[old_record_ids], {'fields': ['id', field_name]},)
-    #             print(f"Fetched {len(old_record_data)} records with {field_name} from old DB.")
-    #
-    #             for rec in old_record_data:
-    #                 old_rec_id = rec['id']
-    #                 old_term_field = rec.get(field_name)
-    #                 if not old_term_field:
-    #                     continue
-    #
-    #                 old_payment_term_id = old_term_field[0]  # many2one field (ID only)
-    #
-    #                 # Find matching record in NEW DB by old_id
-    #                 new_record_find = models.execute_kw(new_db_name, new_uid, password, old_table_name, 'search', [[('old_id', '=', old_rec_id)]], {'context': {'active_test': False}},)
-    #                 if not new_record_find:
-    #                     print(f"⚠️ Partner old_id {old_rec_id} not found in new DB.")
-    #                     continue
-    #
-    #                 # Find matching payment term in NEW DB by old_id
-    #                 new_payment_term_ids = models.execute_kw(new_db_name, new_uid, password, 'account.payment.term', 'search', [[('old_id', '=', old_payment_term_id)]],)
-    #
-    #                 if not new_payment_term_ids:
-    #                     print(f"⚠️ Payment Term old_id {old_payment_term_id} not found in new DB for partner old_id {old_rec_id}")
-    #                     continue
-    #
-    #                 models.execute_kw(new_db_name, new_uid, password, old_table_name, 'write', [new_record_find, {field_name: new_payment_term_ids[0]}],)
-    #
-    #                 print(f"✅ Updated partner old_id {old_rec_id} field {field_name} → term old_id {old_payment_term_id}")
-    #
-    #     except Exception as e:
-    #         return {
-    #             "type": "ir.actions.client",
-    #             "tag": "display_notification",
-    #             "params": {
-    #                 "title": "Migration Error",
-    #                 "message": f"Error during migration: {str(e)}",
-    #                 "type": "danger",
-    #                 "sticky": False,
-    #             },
-    #         }

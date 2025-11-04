@@ -9,6 +9,7 @@
                     <button string="Load Tables" type="object" name="load_tables" class="btn-primary"/>
                     <button string="Disconnect" type="object" name="disconnect_database" class="btn-primary"/>
                     <button string="Update Name" type="object" name="update_name" class="btn-primary"/>
+                    <button string="Migrate From Excel" type="object" name="migrate_from_excel" class="btn-primary"/>
                 </header>
                 <sheet>
                     <div class="o_row">

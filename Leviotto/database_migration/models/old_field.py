@@ -489,6 +489,16 @@ class AccountAnalyticLine(models.Model):
 
     old_id = fields.Integer(string="Old ID")
 
+class ResBank(models.Model):
+    _inherit = "res.bank"
+
+    old_id = fields.Integer(string="Old ID")
+
+class HrContractType(models.Model):
+    _inherit = "hr.contract.type"
+
+    old_id = fields.Integer(string="Old ID")
+
 # class AccountRoot(models.Model):
 #     _inherit = "account.root"
 #
